@@ -231,8 +231,8 @@ o	All Sale Totals by Customer over a range of dates (Day, Week, Month, Quarter a
 
 select 
 c.customer_id,
-SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
-SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
+SUM(total) OVER(PARTITION BY c.customer_id,date(transaction_date)) AS tot_by_date,
+SUM(total) OVER(PARTITION BY c.customer_id,EXTRACT(year FROM transaction_date)) AS tot_by_year
 from 
 DIM_OMNI_TRAN_HEADER TH
 JOIN 
@@ -245,7 +245,7 @@ o	All Sale Totals by Store and Division over a range of dates (Day, Week, Month,
 select 
 S.STORE,
 S.DIVISION,
-SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
+SUM(total) OVER(PARTITION BY s.store,s.division,date(transaction_date)) AS tot_by_date,
 SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
 from 
 DIM_OMNI_TRAN_HEADER TH
@@ -260,8 +260,8 @@ o	All Sale Totals by Products Categories over a range of dates (Day, Week, Month
 
 select
 P.Category,
-SUM(original_price) OVER(PARTITION BY date(th.transaction_date)) AS tot_by_date,
-SUM(original_price) OVER(PARTITION BY EXTRACT(year FROM th.transaction_date)) AS tot_by_year
+SUM(original_price) OVER(PARTITION BY P.Category,date(th.transaction_date)) AS tot_by_date,
+SUM(original_price) OVER(PARTITION BY P.Category,EXTRACT(year FROM th.transaction_date)) AS tot_by_year
 from 
 OMNI_TRANSACTIONS TL
 join DIM_OMNI_TRAN_HEADER TH
