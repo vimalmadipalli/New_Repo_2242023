@@ -1,0 +1,283 @@
+Step 1:
+Creating Dimensions for Product, Store, Customer
+
+Table_Name: DIM_PRODUCT
+Type      : SCD2   
+
+select 
+Product_Key, -- (Generate a Surrogate Key for every new SKU)
+sku,      
+description,
+vendor_name,
+department,
+subdepartment,
+catgory
+from product_master
+
+
+Table_Name: DIM_STORE
+Type      : SCD2 
+
+select
+Store_Key, -- (Generate a Surrogate Key for every new Store)
+store_no,
+store_name,
+adress_1,
+adress_2,
+adress_3,
+state,
+zip,
+phone,
+store_mgr,
+division,
+from store_master 
+
+create a one time entry for store 999 into DIM_STORE representing all online(ecomm) sales
+
+Table_Name: DIM_CUSTOMER
+Type      : SCD1
+select
+Customer_Key, -- (Generate a Surrogate Key for every new Customer_ID)
+customer_id,
+first_name,
+last_name,
+adress_1,
+adress_2,
+adress_3,
+state,
+zip,
+phone,
+email
+from customer_master
+
+
+The three dimensional tables are as below
+
+DIM_PRODUCT
+product_key     Int
+sku	            varchar(50)
+description	    varchar(255)
+vendor_name  	varchar(255)
+department	    varchar(255)
+subdepartment	varchar(255)
+catgory	        varchar(255)
+scd_start_date  timestamp
+scd_end_date    time_stamp
+scd_curr_ind    int
+load_date       timestamp
+
+
+
+DIM_STORE
+Store_Key   int
+store_no	int
+store_name	varchar(255)
+adress_1	varchar(255)
+adress_2	varchar(255)
+adress_3	varchar(255)
+state	    varchar(2)
+zip	        varchar(5)
+phone	    varchar(15)
+store_mgr	varchar(255)
+division	varchar(25)
+scd_start_date  timestamp
+scd_end_date    time_stamp
+scd_curr_ind    int
+load_date       timestamp
+
+
+DIM_CUSTOMER
+Customer_Key  int
+customer_id   bigint
+first_name    varchar(50)
+last_name	  varchar(50)
+adress_1	  varchar(255)
+adress_2	  varchar(255)
+adress_3	  varchar(255)
+state	      varchar(2)
+zip	          varchar(5)
+phone	      varchar(15)
+email	      varchar(255)
+insert_date   timestamp
+update_date   timestamp
+load_date     timestamp
+
+
+
+
+Step 2:
+Creating a  Fact tables 
+
+
+Table_Name:
+OMNI_TRAN_HEADER
+Type      : Insert Only 
+
+select 
+Tran_Header_Key, -- (Generate a Surrogate Key for Every new id,transaction_date,store_number)
+id,
+transaction_date,
+store_key,
+customer_key,
+transaction_type,
+total
+from 
+(
+select 
+id,
+transaction_date,
+store_number,
+'STORE' as transaction_type,
+customer_id,
+total
+from 
+store_transaction_header
+union 
+select
+order_id as id,
+order_date as transaction_date,
+999 as store_number,
+'ONLINE' as transaction_type,
+customer_id,
+total
+from 
+online_order_header
+)core
+join 
+join dim_store str on
+on core.store_number = str.store_no
+join dim_customer c
+on core.customer_id = c.customer_id
+
+
+
+
+Table_Name:
+OMNI_TRANSACTIONS
+Type : Insert Only 
+
+select 
+transaction_line_key, -- (Generate a Surrogate Key for Every new transaction_key,product_key)
+core.*
+(select 
+transaction_key,
+store_key,
+product_key,
+customer_key,
+qty,
+original_price,
+discount_price,
+taxable_flag
+from 
+store_transaction_detail th
+join dim_store str on
+on th.store_no = str.store_no
+join dim_product pm 
+on th.sku = pm.sku
+join dim_customer c
+on th.customer_id = c.customer_id
+union 
+select 
+transaction_key,
+store_key,
+product_key,
+customer_key,
+qty,
+original_price,
+discount_price,
+taxable_flag
+from 
+online_order_header oh
+join dim_store str on
+on oh.store_no = str.store_no
+join dim_product pm 
+on oh.sku = pm.sku
+join dim_customer c
+on oh.customer_id = c.customer_id
+) core
+
+
+
+The two fact tables are as below.
+
+DIM_OMNI_TRAN_HEADER
+Tran_Header_Key   int,
+id                bigint,
+transaction_date  timestamp,
+store_key         int,
+customer_key      int,
+transaction_type  varchar(10),
+total             decimal(20,2),
+insert_date       timestamp
+load_date         timestamp
+
+
+
+OMNI_TRANSACTIONS
+transaction_line_key int,
+transaction_key      int,
+product_key          int,
+qty                  int,
+original_price       decimal(20,2),
+discount_price       decimal(20,2),
+taxable_flag         char(1),
+insert_date          timestamp,
+load_date            timestamp
+
+
+
+Reporting Scenarios
+o	All Sale Totals by Customer over a range of dates (Day, Week, Month, Quarter and Year)
+
+select 
+c.customer_id,
+SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
+SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
+from 
+DIM_OMNI_TRAN_HEADER TH
+JOIN 
+DIM_CUSTOMER C
+ON TH.CUSTOMER_ID = TH.CUSTOMER_ID
+
+
+o	All Sale Totals by Store and Division over a range of dates (Day, Week, Month, Quarter and Year)
+
+select 
+S.STORE,
+S.DIVISION,
+SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
+SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
+from 
+DIM_OMNI_TRAN_HEADER TH
+JOIN 
+DIM_STORES S
+ON S.STORE_KEY = TH.STORE_KEY
+WHERE S.SCD_CURR_IND = 1
+
+
+
+o	All Sale Totals by Products Categories over a range of dates (Day, Week, Month, Quarter and Year)
+
+select
+P.Category,
+SUM(original_price) OVER(PARTITION BY date(th.transaction_date)) AS tot_by_date,
+SUM(original_price) OVER(PARTITION BY EXTRACT(year FROM th.transaction_date)) AS tot_by_year
+from 
+OMNI_TRANSACTIONS TL
+join DIM_OMNI_TRAN_HEADER TH
+on TH.transaction_key = tl.transaction_key
+JOIN DIM_PRODUCT P
+ON P.PRODUCT_KEY = TL.PRODUCT_KEY
+
+
+
+
+o	Customer sales by channel (in-store or online) a range of dates (Day, Week, Month, Quarter and Year)
+
+select
+th.transaction_type,
+SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
+SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
+from 
+DIM_OMNI_TRAN_HEADER TH
+
