@@ -276,8 +276,12 @@ o	Customer sales by channel (in-store or online) a range of dates (Day, Week, Mo
 
 select
 th.transaction_type,
-SUM(total) OVER(PARTITION BY date(transaction_date)) AS tot_by_date,
-SUM(total) OVER(PARTITION BY EXTRACT(year FROM transaction_date)) AS tot_by_year
+date(transaction_date) as dt ,
+EXTRACT(year FROM transaction_date) as yr,
+SUM(total) as tot
 from 
 DIM_OMNI_TRAN_HEADER TH
-
+group by 
+th.transaction_type,
+date(transaction_date),
+EXTRACT(year FROM transaction_date)
